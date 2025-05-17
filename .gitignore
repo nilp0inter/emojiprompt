@@ -3,3 +3,8 @@ zig-cache/
 .zig-cache/
 pinentry-wayprompt
 wayprompt-cli
+
+
+### Created by https://www.gitignore.io
+### direnv ###
+.direnv
