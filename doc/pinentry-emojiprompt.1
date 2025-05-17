@@ -1,0 +1,152 @@
+.TH PINENTRY-EMOJIPROMPT 1 "github.com/nilp0inter/emojiprompt" "General Commands Manual"
+.
+.SH NAME
+.P
+pinentry-emojiprompt \- Emoji-based pinentry implementation for GnuPG
+.
+.
+.SH SYNOPSIS
+.SY pinentry\-emojiprompt
+.YS
+.
+.
+.SH DESCRIPTION
+.P
+The pinentry-emojiprompt executable described in this manual page represents the
+pinentry implementation based on emojiprompt, providing emoji-based password
+feedback for GnuPG operations.
+.
+.P
+When entering passwords or passphrases for GPG operations, pinentry-emojiprompt
+displays emojis or emoticons instead of asterisks, helping users verify they've
+typed their password correctly before submission.
+.
+.P
+For general information on emojiprompt, read
+.BR emojiprompt (1).
+.
+.
+.SH USE WITH GPG
+.P
+To use pinentry-emojiprompt as the password prompt for
+.BR gpg (1)
+you need to configure
+.BR gpg-agent (1).
+For example by creating the file \fB~/.gnupg/gpg-agent.conf\fR and writing into
+it the following line:
+.
+.P
+.B pinentry-program /path/to/pinentry-emojiprompt
+.
+.P
+Note that the path to the pinentry-emojiprompt executable depends on how you
+installed it and/or how it was packaged.
+.
+.P
+After updating the configuration, restart the gpg-agent:
+.RS
+.B gpg-connect-agent reloadagent /bye
+.RE
+.
+.
+.SH FEATURES
+.P
+pinentry-emojiprompt provides all standard pinentry functionality with enhanced
+visual feedback:
+.
+.IP \(bu 2
+\fBEmoji feedback:\fR Shows emojis instead of asterisks while typing passwords
+.IP \(bu 2
+\fBTwo-stage verification:\fR Press Enter once to see verification emojis, again to submit
+.IP \(bu 2
+\fBWayland native:\fR Full Wayland support with layer-shell protocol
+.IP \(bu 2
+\fBTTY fallback:\fR Automatically uses TTY mode when Wayland is unavailable
+.IP \(bu 2
+\fBCustomizable:\fR Configure emoji sets and colors via config file
+.
+.
+.SH IMPLEMENTATION COMPLETENESS
+.P
+As of writing, pinentry-emojiprompt implements the most important components of
+the pinentry protocol to be viable for day-to-day usage.
+The emoji feedback system is fully integrated with all password prompts.
+However more advanced pinentry features may not yet be supported.
+Patches are welcome.
+.
+.
+.SH CONFIGURATION
+.P
+pinentry-emojiprompt uses the same configuration file as emojiprompt.
+See
+.BR emojiprompt (5)
+for detailed configuration options.
+.
+.P
+Example configuration for GPG use:
+.RS
+.EX
+[general]
+emoji-count = 5;
+emoji-table = '🔒,🔑,🛡️,🔐,🔓';
+
+[colours]
+background = 0x1a1b26;
+text = 0xffffff;
+.EE
+.RE
+.
+.
+.SH RETURN VALUE
+.P
+pinentry-emojiprompt will exit with one of the following codes:
+.
+.RS 1.2i
+.TS
+tab(@), left, box;
+c | c
+rB | l.
+\fBValue\fR@\fBExplanation\fR
+_
+0@Successful operation (for "ok", "not-ok" and "cancel").
+_
+1@An error occurred.
+.TE
+.RE
+.
+.
+.SH EXAMPLE USAGE
+.P
+Once configured, pinentry-emojiprompt will be used automatically for:
+.
+.IP \(bu 2
+Decrypting files:
+.RS
+.B gpg --decrypt file.gpg
+.RE
+.IP \(bu 2
+Signing commits:
+.RS
+.B git commit -S -m "Signed commit"
+.RE
+.IP \(bu 2
+SSH key operations (if gpg-agent handles SSH):
+.RS
+.B ssh-add -l
+.RE
+.
+.
+.SH AUTHOR
+.P
+.MT github.com/nilp0inter
+nilp0inter
+.ME
+.P
+Based on wayprompt by Leon Henrik Plickat.
+.
+.
+.SH SEE ALSO
+.BR emojiprompt (1),
+.BR emojiprompt (5),
+.BR gpg (1),
+.BR gpg-agent (1)

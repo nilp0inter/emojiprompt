@@ -31,58 +31,58 @@ pub fn build(b: *std.Build) !void {
     const fcft = b.dependency("zig-fcft", .{}).module("fcft");
     const ini = b.dependency("zig-ini", .{}).module("ini");
 
-    const wayprompt_cli = b.addExecutable(.{
-        .name = "wayprompt",
-        .root_source_file = b.path("src/wayprompt-cli.zig"),
+    const emojiprompt_cli = b.addExecutable(.{
+        .name = "emojiprompt",
+        .root_source_file = b.path("src/emojiprompt-cli.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
         .use_llvm = llvm,
         .use_lld = llvm,
     });
-    wayprompt_cli.root_module.addOptions("build_options", options);
-    wayprompt_cli.linkLibC();
-    wayprompt_cli.root_module.addImport("wayland", wayland);
-    wayprompt_cli.linkSystemLibrary("wayland-client");
-    wayprompt_cli.linkSystemLibrary("wayland-cursor");
-    scanner.addCSource(wayprompt_cli);
-    wayprompt_cli.root_module.addImport("ini", ini);
-    wayprompt_cli.root_module.addImport("fcft", fcft);
-    wayprompt_cli.linkSystemLibrary("fcft");
-    wayprompt_cli.root_module.addImport("xkbcommon", xkbcommon);
-    wayprompt_cli.linkSystemLibrary("xkbcommon");
-    wayprompt_cli.root_module.addImport("pixman", pixman);
-    wayprompt_cli.linkSystemLibrary("pixman-1");
-    wayprompt_cli.root_module.addImport("spoon", spoon);
-    wayprompt_cli.root_module.addOptions("build_options", options);
-    wayprompt_cli.pie = pie;
-    b.installArtifact(wayprompt_cli);
+    emojiprompt_cli.root_module.addOptions("build_options", options);
+    emojiprompt_cli.linkLibC();
+    emojiprompt_cli.root_module.addImport("wayland", wayland);
+    emojiprompt_cli.linkSystemLibrary("wayland-client");
+    emojiprompt_cli.linkSystemLibrary("wayland-cursor");
+    scanner.addCSource(emojiprompt_cli);
+    emojiprompt_cli.root_module.addImport("ini", ini);
+    emojiprompt_cli.root_module.addImport("fcft", fcft);
+    emojiprompt_cli.linkSystemLibrary("fcft");
+    emojiprompt_cli.root_module.addImport("xkbcommon", xkbcommon);
+    emojiprompt_cli.linkSystemLibrary("xkbcommon");
+    emojiprompt_cli.root_module.addImport("pixman", pixman);
+    emojiprompt_cli.linkSystemLibrary("pixman-1");
+    emojiprompt_cli.root_module.addImport("spoon", spoon);
+    emojiprompt_cli.root_module.addOptions("build_options", options);
+    emojiprompt_cli.pie = pie;
+    b.installArtifact(emojiprompt_cli);
 
-    const wayprompt_pinentry = b.addExecutable(.{
-        .name = "pinentry-wayprompt",
-        .root_source_file = b.path("src/wayprompt-pinentry.zig"),
+    const emojiprompt_pinentry = b.addExecutable(.{
+        .name = "pinentry-emojiprompt",
+        .root_source_file = b.path("src/emojiprompt-pinentry.zig"),
         .target = target,
         .optimize = optimize,
         .strip = strip,
         .use_llvm = llvm,
         .use_lld = llvm,
     });
-    wayprompt_pinentry.linkLibC();
-    wayprompt_pinentry.root_module.addImport("wayland", wayland);
-    wayprompt_pinentry.linkSystemLibrary("wayland-client");
-    wayprompt_pinentry.linkSystemLibrary("wayland-cursor");
-    scanner.addCSource(wayprompt_pinentry);
-    wayprompt_pinentry.root_module.addImport("ini", ini);
-    wayprompt_pinentry.root_module.addImport("fcft", fcft);
-    wayprompt_pinentry.linkSystemLibrary("fcft");
-    wayprompt_pinentry.root_module.addImport("xkbcommon", xkbcommon);
-    wayprompt_pinentry.linkSystemLibrary("xkbcommon");
-    wayprompt_pinentry.root_module.addImport("pixman", pixman);
-    wayprompt_pinentry.linkSystemLibrary("pixman-1");
-    wayprompt_pinentry.root_module.addImport("spoon", spoon);
-    wayprompt_pinentry.root_module.addOptions("build_options", options);
-    wayprompt_pinentry.pie = pie;
-    b.installArtifact(wayprompt_pinentry);
+    emojiprompt_pinentry.linkLibC();
+    emojiprompt_pinentry.root_module.addImport("wayland", wayland);
+    emojiprompt_pinentry.linkSystemLibrary("wayland-client");
+    emojiprompt_pinentry.linkSystemLibrary("wayland-cursor");
+    scanner.addCSource(emojiprompt_pinentry);
+    emojiprompt_pinentry.root_module.addImport("ini", ini);
+    emojiprompt_pinentry.root_module.addImport("fcft", fcft);
+    emojiprompt_pinentry.linkSystemLibrary("fcft");
+    emojiprompt_pinentry.root_module.addImport("xkbcommon", xkbcommon);
+    emojiprompt_pinentry.linkSystemLibrary("xkbcommon");
+    emojiprompt_pinentry.root_module.addImport("pixman", pixman);
+    emojiprompt_pinentry.linkSystemLibrary("pixman-1");
+    emojiprompt_pinentry.root_module.addImport("spoon", spoon);
+    emojiprompt_pinentry.root_module.addOptions("build_options", options);
+    emojiprompt_pinentry.pie = pie;
+    b.installArtifact(emojiprompt_pinentry);
 
     const tests = b.addTest(.{
         .root_source_file = b.path("src/tests.zig"),
@@ -93,10 +93,10 @@ pub fn build(b: *std.Build) !void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_test.step);
 
-    b.installFile("bin/wayprompt-ssh-askpass", "bin/wayprompt-ssh-askpass");
+    b.installFile("bin/emojiprompt-ssh-askpass", "bin/emojiprompt-ssh-askpass");
 
-    b.installFile("doc/wayprompt.1", "share/man/man1/wayprompt.1");
-    b.installFile("doc/pinentry-wayprompt.1", "share/man/man1/pinentry-wayprompt.1");
-    b.installFile("doc/wayprompt-ssh-askpass.1", "share/man/man1/wayprompt-ssh-askpass.1");
-    b.installFile("doc/wayprompt.5", "share/man/man5/wayprompt.5");
+    b.installFile("doc/emojiprompt.1", "share/man/man1/emojiprompt.1");
+    b.installFile("doc/pinentry-emojiprompt.1", "share/man/man1/pinentry-emojiprompt.1");
+    b.installFile("doc/emojiprompt-ssh-askpass.1", "share/man/man1/emojiprompt-ssh-askpass.1");
+    b.installFile("doc/emojiprompt.5", "share/man/man5/emojiprompt.5");
 }

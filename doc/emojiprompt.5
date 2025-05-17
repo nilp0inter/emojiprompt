@@ -1,0 +1,307 @@
+.TH EMOJIPROMPT 5 "github.com/nilp0inter/emojiprompt" "File Formats Manual"
+.
+.SH NAME
+.P
+config.ini \- configuration file for emojiprompt
+.
+.
+.SH DESCRIPTION
+.P
+This manual page describes the configuration file used by all versions of
+emojiprompt.
+.P
+emojiprompt uses the INI file format for configuration, meaning
+variable-value-assignments sorted into sections.
+.
+.P
+.RS
+.EX
+[section]
+# This is a comment
+variable = value;
+.EE
+.RE
+.
+.P
+On startup emojiprompt will look for a file in the following locations, in this
+order:
+.IP \(bu 2
+\fB$XDG_CONFIG_HOME/emojiprompt/config.ini\fR (or \fB$HOME/.config/emojiprompt/config.ini\fR
+should \fB$XDG_CONFIG_HOME\fR be unset)
+.IP \(bu 2
+\fB/etc/emojiprompt/config.ini\fR
+.
+.
+.SH SECTION: [general]
+.P
+\fBfont\-regular\fR = \fI<font description>\fR;
+.RS
+Font used for description, buttons, error message and emojis.
+Defaults to "sans:size=14".
+.RE
+.
+.P
+\fBfont\-large\fR = \fI<font description>\fR;
+.RS
+Font used for title.
+Defaults to "sans:size=20".
+.RE
+.
+.P
+\fBemoji\-count\fR = \fI<positive integer>\fR;
+.RS
+Number of emojis to display for password feedback.
+Defaults to 3.
+.RE
+.
+.P
+\fBemoji\-size\fR = \fI<positive integer>\fR;
+.RS
+Size of emoji display area in pixels.
+Defaults to 24.
+.RE
+.
+.P
+\fBemoji\-table\fR = \fI'<comma-separated emoji list>'\fR;
+.RS
+Custom emoji set for password feedback. Must be quoted and comma-separated.
+If not specified, uses default emoji set.
+Example: emoji-table = '🔒,🔑,🛡️,🔐,🔓';
+.RE
+.
+.P
+\fBbutton\-inner\-padding\fR = \fI<positive integer>\fR;
+.RS
+Padding around the labels of the buttons.
+Defaults to 5.
+.RE
+.
+.P
+\fBvertical\-padding\fR = \fI<positive integer>\fR;
+.RS
+Top and bottom padding of the dialog prompt window.
+Defaults to 10.
+.RE
+.
+.P
+\fBhorizontal\-padding\fR = \fI<positive integer>\fR;
+.RS
+Left and right padding of the dialog prompt window.
+Defaults to 15.
+.RE
+.
+.P
+\fBborder\fR = \fI<positive integer>\fR;
+.RS
+Width of the border of the dialog prompt window.
+Defaults to 2.
+.RE
+.
+.P
+\fBbutton\-border\fR = \fI<positive integer>\fR;
+.RS
+Width of the border around buttons.
+Defaults to 1.
+.RE
+.
+.P
+\fBcorner\-radius\fR = \fI<positive integer>\fR;
+.RS
+Radius for rounded corners of the dialog window.
+Set to 0 for square corners.
+Defaults to 10.
+.RE
+.
+.
+.SH SECTION: [tty]
+.P
+This section configures the TTY fallback mode when Wayland is not available.
+.
+.P
+\fBuse\-emoji\fR = \fI<true|false>\fR;
+.RS
+Whether to use emojis in TTY mode. If true, auto-detects terminal emoji support.
+If false, uses ASCII emoticons instead.
+Defaults to true.
+.RE
+.
+.P
+\fBemoticon\fR = \fI'<emoticon>'\fR;
+.RS
+Define custom emoticons for TTY mode. Can be specified multiple times.
+Each emoticon must be quoted and terminated with semicolon.
+Emoticons are center-padded for consistent display width.
+Example:
+.EX
+emoticon = '^_^';
+emoticon = 'O_O';
+emoticon = '>_<';
+emoticon = ':-)';
+.EE
+.RE
+.
+.
+.SH SECTION: [colours]
+.P
+All colours must be specified as hexadecimal in the following format:
+\fB0xRRGGBB\fR or \fB0xRRGGBBAA\fR where AA is alpha (transparency).
+.
+.P
+\fBbackground\fR = \fI<colour>\fR;
+.RS
+Background colour of the dialog prompt window.
+Defaults to 0x262626.
+.RE
+.
+.P
+\fBborder\fR = \fI<colour>\fR;
+.RS
+Colour of the border of the dialog prompt window.
+Defaults to 0x949494.
+.RE
+.
+.P
+\fBtext\fR = \fI<colour>\fR;
+.RS
+Colour of the text.
+Defaults to 0xffffff.
+.RE
+.
+.P
+\fBerror\-text\fR = \fI<colour>\fR;
+.RS
+Colour of the error text.
+Defaults to 0xcc3333.
+.RE
+.
+.P
+\fBpin\-background\fR = \fI<colour>\fR;
+.RS
+Background colour of the emoji display area.
+Defaults to 0x585858.
+.RE
+.
+.P
+\fBpin\-border\fR = \fI<colour>\fR;
+.RS
+Border colour of the emoji display area.
+Defaults to 0xc7c7c7.
+.RE
+.
+.P
+\fBok\-button\fR = \fI<colour>\fR;
+.RS
+Background colour of the ok button.
+Defaults to 0x5d9b5d.
+.RE
+.
+.P
+\fBok\-button\-border\fR = \fI<colour>\fR;
+.RS
+Border colour of the ok button.
+Defaults to 0x5d9b5d.
+.RE
+.
+.P
+\fBok\-button\-text\fR = \fI<colour>\fR;
+.RS
+Text colour of the ok button.
+Defaults to 0xffffff.
+.RE
+.
+.P
+\fBcancel\-button\fR = \fI<colour>\fR;
+.RS
+Background colour of the cancel button.
+Defaults to 0x585858.
+.RE
+.
+.P
+\fBcancel\-button\-border\fR = \fI<colour>\fR;
+.RS
+Border colour of the cancel button.
+Defaults to 0xc7c7c7.
+.RE
+.
+.P
+\fBcancel\-button\-text\fR = \fI<colour>\fR;
+.RS
+Text colour of the cancel button.
+Defaults to 0xffffff.
+.RE
+.
+.P
+\fBnot\-ok\-button\fR = \fI<colour>\fR;
+.RS
+Background colour of the not-ok button.
+Defaults to 0xcc9933.
+.RE
+.
+.P
+\fBnot\-ok\-button\-border\fR = \fI<colour>\fR;
+.RS
+Border colour of the not-ok button.
+Defaults to 0xcc9933.
+.RE
+.
+.P
+\fBnot\-ok\-button\-text\fR = \fI<colour>\fR;
+.RS
+Text colour of the not-ok button.
+Defaults to 0xffffff.
+.RE
+.
+.
+.SH EXAMPLE
+.P
+Example configuration file with custom emoji and emoticon sets:
+.
+.RS
+.EX
+[general]
+emoji-count = 5;
+emoji-size = 32;
+# Security-themed emojis
+emoji-table = '🔒,🔑,🛡️,🔐,🔓';
+
+[tty]
+use-emoji = false;
+# Custom emoticons for TTY
+emoticon = '^_^';
+emoticon = 'O_O';
+emoticon = '>_<';
+emoticon = ':-)';
+emoticon = ':-(';
+emoticon = ':-D';
+
+[colours]
+background = 0x1a1b26;
+border = 0x6699CC;
+text = 0xCCCCCC;
+error-text = 0xF2777A;
+.EE
+.RE
+.
+.
+.SH EMOJI THEMES
+.P
+You can create custom emoji themes by setting emoji-table:
+.
+.RS
+.EX
+# Nature theme
+emoji-table = '🌸,🌺,🌻,🌷,🌹,🌵,🌲,🌴';
+
+# Space theme
+emoji-table = '🚀,🛸,🌟,⭐,🌙,☄️,🌍,🪐';
+
+# Animal theme
+emoji-table = '🐶,🐱,🐭,🐹,🐰,🦊,🐻,🐼';
+.EE
+.RE
+.
+.
+.SH SEE ALSO
+.BR emojiprompt (1),
+.BR pinentry-emojiprompt (1),
+.BR emojiprompt-ssh-askpass (1)

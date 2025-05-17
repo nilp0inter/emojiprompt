@@ -1,0 +1,163 @@
+.TH EMOJIPROMPT-SSH-ASKPASS 1 "github.com/nilp0inter/emojiprompt" "General Commands Manual"
+.
+.SH NAME
+.P
+emojiprompt-ssh-askpass \- Emoji-based ssh-askpass implementation
+.
+.
+.SH SYNOPSIS
+.SY emojiprompt\-ssh\-askpass
+.YS
+.
+.
+.SH DESCRIPTION
+.P
+The emojiprompt-ssh-askpass executable described in this manual page represents
+the ssh-askpass implementation based on emojiprompt, providing emoji-based
+password feedback for SSH operations.
+.
+.P
+When entering SSH passwords or passphrases, emojiprompt-ssh-askpass displays
+emojis or emoticons instead of asterisks, helping users verify they've typed
+their password correctly before submission.
+.
+.P
+For general information on emojiprompt, read
+.BR emojiprompt (1).
+.
+.
+.SH USE WITH SSH
+.P
+To use emojiprompt-ssh-askpass as the askpass program for
+.BR ssh (1)
+as well as for programs that wrap it, like
+.BR git (1)
+or 
+.BR rsync (1),
+you need to set and export the \fBSSH_ASKPASS\fR env var to the path to the
+emojiprompt-ssh-askpass executable.
+.
+.P
+For example, in your shell configuration:
+.RS
+.EX
+export SSH_ASKPASS=/usr/local/bin/emojiprompt-ssh-askpass
+export SSH_ASKPASS_REQUIRE=prefer
+.EE
+.RE
+.
+.P
+By default, ssh will only use the configured askpass program if it is not
+attached to a terminal.
+To force ssh to always use the askpass program, set and export
+\fBSSH_ASKPASS_REQUIRE=force\fR.
+.
+.
+.SH FEATURES
+.P
+emojiprompt-ssh-askpass provides enhanced visual feedback for SSH operations:
+.
+.IP \(bu 2
+\fBEmoji feedback:\fR Shows emojis instead of asterisks while typing passwords
+.IP \(bu 2
+\fBTwo-stage verification:\fR Press Enter once to verify emojis, again to submit
+.IP \(bu 2
+\fBWayland native:\fR Full Wayland support with layer-shell protocol
+.IP \(bu 2
+\fBTTY fallback:\fR Automatically uses TTY mode when Wayland is unavailable
+.IP \(bu 2
+\fBCustomizable:\fR Configure emoji sets and colors via config file
+.
+.
+.SH CONFIGURATION
+.P
+emojiprompt-ssh-askpass uses the same configuration file as emojiprompt.
+See
+.BR emojiprompt (5)
+for detailed configuration options.
+.
+.P
+Example configuration for SSH use:
+.RS
+.EX
+[general]
+emoji-count = 4;
+emoji-table = '🔐,🗝️,🔑,🔒';
+
+[tty]
+use-emoji = true;
+.EE
+.RE
+.
+.
+.SH RETURN VALUE
+.P
+emojiprompt-ssh-askpass will exit with one of the following codes:
+.
+.TS
+tab(@), left, box;
+c | c
+rB | l.
+\fBValue\fR@\fBExplanation\fR
+_
+0@User triggered "ok" (by pressing Enter twice or clicking the button).
+_
+1@User triggered "cancel" (by pressing Escape or clicking the button) or an error occurred.
+.TE
+.
+.
+.SH EXAMPLE USAGE
+.P
+Once configured, emojiprompt-ssh-askpass will be used automatically for:
+.
+.IP \(bu 2
+Adding SSH keys:
+.RS
+.B ssh-add ~/.ssh/id_rsa
+.RE
+.IP \(bu 2
+SSH connections requiring password:
+.RS
+.B ssh user@server
+.RE
+.IP \(bu 2
+Git operations over SSH:
+.RS
+.B git push origin main
+.RE
+.IP \(bu 2
+Rsync over SSH:
+.RS
+.B rsync -avz file.txt user@server:/path/
+.RE
+.
+.
+.SH TROUBLESHOOTING
+.P
+If emojiprompt-ssh-askpass is not being invoked:
+.
+.IP \(bu 2
+Ensure SSH_ASKPASS is exported in your shell environment
+.IP \(bu 2
+Try setting SSH_ASKPASS_REQUIRE=force to override terminal detection
+.IP \(bu 2
+Verify the executable path is correct and the file is executable
+.IP \(bu 2
+Check that Wayland is running or TTY fallback is working
+.
+.
+.SH AUTHOR
+.P
+.MT github.com/nilp0inter
+nilp0inter
+.ME
+.P
+Based on wayprompt by Leon Henrik Plickat.
+.
+.
+.SH SEE ALSO
+.BR emojiprompt (1),
+.BR emojiprompt (5),
+.BR ssh (1),
+.BR ssh-add (1),
+.BR ssh-agent (1)
