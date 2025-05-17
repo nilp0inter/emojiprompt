@@ -83,6 +83,9 @@ const WaylandUi = struct {
     border: u31 = 2,
     corner_radius: u15 = 10,
     pin_square_amount: u31 = 16,
+    use_emoji_feedback: bool = false,
+    emoji_count: u31 = 3,
+    emoji_table: ?[]const u8 = null,
 
     font_regular: ?[:0]u8 = null,
     font_large: ?[:0]u8 = null,
@@ -95,6 +98,10 @@ const WaylandUi = struct {
         if (self.font_large) |p| {
             alloc.free(p);
             self.font_large = null;
+        }
+        if (self.emoji_table) |p| {
+            alloc.free(p);
+            self.emoji_table = null;
         }
     }
 
@@ -109,12 +116,32 @@ const WaylandUi = struct {
                             return error.BadConfig;
                         };
                     },
+                    bool => {
+                        if (mem.eql(u8, value, "true") or mem.eql(u8, value, "yes") or mem.eql(u8, value, "1")) {
+                            @field(self, field.name) = true;
+                        } else if (mem.eql(u8, value, "false") or mem.eql(u8, value, "no") or mem.eql(u8, value, "0")) {
+                            @field(self, field.name) = false;
+                        } else {
+                            log.err("{s}:{}: Invalid boolean value: '{s}', use 'true' or 'false'", .{ path, line, value });
+                            return error.BadConfig;
+                        }
+                    },
                     ?[:0]u8 => {
                         if (@field(self, field.name)) |p| {
                             alloc.free(p);
                             @field(self, field.name) = null;
                         }
                         @field(self, field.name) = alloc.dupeZ(u8, value) catch {
+                            log.err("{s}:{}: Parsing value for '{s}': Failed to allocate memory for string: '{s}'", .{ path, line, variable, value });
+                            return error.OutOfMemory;
+                        };
+                    },
+                    ?[]const u8 => {
+                        if (@field(self, field.name)) |p| {
+                            alloc.free(p);
+                            @field(self, field.name) = null;
+                        }
+                        @field(self, field.name) = alloc.dupe(u8, value) catch {
                             log.err("{s}:{}: Parsing value for '{s}': Failed to allocate memory for string: '{s}'", .{ path, line, variable, value });
                             return error.OutOfMemory;
                         };

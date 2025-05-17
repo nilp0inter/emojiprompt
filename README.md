@@ -8,6 +8,12 @@ like when invoked while using a TTY.
 
 Requires the compositor to support the layershell.
 
+Features:
+- PIN/password input with customizable UI
+- Optional emoji-based password feedback (instead of traditional squares/dots)
+- Both GUI and TUI (fallback) interfaces
+- Highly configurable through config file
+
 Wayprompt ships multiple executables:
 
 * `wayprompt`: CLI prompt tool.

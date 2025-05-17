@@ -112,6 +112,31 @@ Set to 0 to disable round corners.
 Defaults to 10.
 .RE
 .
+.P
+\fBuse\-emoji\-feedback\fR = \fI<boolean>\fR;
+.RS
+If set to "true", the traditional password character squares will be replaced with emoji feedback.
+This provides a consistent visual pattern for a given password, making it easier to verify
+you've typed the correct password before submitting.
+Defaults to false.
+.RE
+.
+.P
+\fBemoji\-count\fR = \fI<positive integer>\fR;
+.RS
+Number of emojis to display when emoji feedback is enabled.
+Defaults to 3.
+.RE
+.
+.P
+\fBemoji\-table\fR = \fI<comma-separated list of emojis>\fR;
+.RS
+Custom list of emojis to use for password feedback when emoji feedback is enabled.
+Emojis should be separated by commas.
+For example: "🍕,🍔,🍟,🌭,🍿,🥤,🧁,🍩,🍪,🍰"
+If not provided, a default set of 100 visually distinct emojis will be used.
+.RE
+.
 .
 .SH SECTION: [colours]
 .P
