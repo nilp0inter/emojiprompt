@@ -36,6 +36,7 @@ const WaylandColours = struct {
     text: pixman.Color = comptimePixmanColourFromRGB("0x000000"),
     error_text: pixman.Color = comptimePixmanColourFromRGB("0xe0002b"),
 
+    // Legacy pin colors (kept for backwards compatibility)
     pin_background: pixman.Color = comptimePixmanColourFromRGB("0xd0d0d0"),
     pin_border: pixman.Color = comptimePixmanColourFromRGB("0x000000"),
     pin_square: pixman.Color = comptimePixmanColourFromRGB("0x808080"),
@@ -77,13 +78,10 @@ const WaylandUi = struct {
     vertical_padding: u31 = 10,
     horizontal_padding: u31 = 15,
     button_inner_padding: u31 = 5,
-    pin_square_size: u31 = 18,
-    pin_square_border: u31 = 1,
+    emoji_size: u31 = 24,
     button_border: u31 = 1,
     border: u31 = 2,
     corner_radius: u15 = 10,
-    pin_square_amount: u31 = 16,
-    use_emoji_feedback: bool = false,
     emoji_count: u31 = 3,
     emoji_table: ?[]const u8 = null,
 
@@ -189,7 +187,11 @@ pub fn reset(self: *Config, alloc: mem.Allocator) void {
 pub fn parse(self: *Config, alloc: mem.Allocator) !void {
     const path = try getConfigPath(alloc);
     defer alloc.free(path);
-    posix.access(path, posix.R_OK) catch return;
+    log.debug("Trying to read config from: {s}", .{path});
+    posix.access(path, posix.R_OK) catch {
+        log.debug("Config file not accessible: {s}", .{path});
+        return;
+    };
 
     const file = try fs.cwd().openFile(path, .{});
     defer file.close();
@@ -233,15 +235,15 @@ fn getConfigPath(alloc: mem.Allocator) ![]const u8 {
     if (posix.getenv("XDG_CONFIG_HOME")) |xdg_config_home| {
         return try fs.path.join(alloc, &[_][]const u8{
             xdg_config_home,
-            "wayprompt/config.ini",
+            "emojiprompt/config.ini",
         });
     } else if (posix.getenv("HOME")) |home| {
         return try fs.path.join(alloc, &[_][]const u8{
             home,
-            ".config/wayprompt/config.ini",
+            ".config/emojiprompt/config.ini",
         });
     } else {
-        return try alloc.dupe(u8, "/etc/wayprompt/config.ini");
+        return try alloc.dupe(u8, "/etc/emojiprompt/config.ini");
     }
 }
 

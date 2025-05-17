@@ -16,6 +16,31 @@ const default_emojis = [_][]const u8{
     "🥇", "🏆", "🧩", "🎲", "🎯", "🎨", "🎭", "🎪", "🎬", "🚩", // Activities
 };
 
+/// Fallback emoticons for terminals that don't support emojis
+/// Uses classic ASCII emoticons that work everywhere
+const fallback_emoticons = [_][]const u8{
+    // Happy faces
+    ":)",    ":-)",   ":D",     ":-D",   "=)",      "=D",      "^_^",      "^.^",   ":P",    ":-P",
+    // Winking and playful
+    ";)",    ";-)",   ";D",     ";P",    "8)",      "8-)",     "B)",       "B-)",   ":o)",   "(::",
+    // Cool and neutral
+    "8|",    ":|",    ":-|",    "=|",    "-_-",     "o_O",     "O_o",      "0_0",   "^o^",   "*_*",
+    // Surprised and excited
+    ":O",    ":-O",   ":o",     ":-o",   "=O",      "\\o/",    "\\o_o/",   "o.O",   "O.o",   ">:)",
+    // Love and hearts
+    "<3",    "</3",   ":*",     ":-*",   "=*",      ":x",      ":-x",      "xD",    "XD",    ":3",
+    // Sad but still expressive
+    ":(",    ":-(",   "=/",     ":-/",   ":\\",     ":-\\",    ">:(",      ">:-(",  "D:",    ":'(",
+    // Silly and fun
+    ":b",    ":-b",   ":p",     "xP",    "XP",      "=p",      "=P",       ">:P",   "<:)",   "]:)",
+    // Misc expressions
+    "o/",    "\\o",   "m(",     ")m",    "^5",      "o7",      "\\m/",     "m/",    "_o_",   "^u^",
+    // More creative ones
+    "(@_@)", "($.$)", "(&.&)",  "(#.#)", "(%.%)",   "(*.*)",   "(+.+)",    "(-.-)", "(=.=)", "(~.~)",
+    // Action emoticons
+    "\\m/",  "m/",    "_\\../", "\\../", "d(^.^)b", "b(^.^)d", "\\(^o^)/", "(^o^)", "(@.@)", "(o.o)",
+};
+
 /// Generate n prime numbers starting from min_prime or higher
 /// Allocates a new slice that the caller must free
 pub fn generatePrimes(alloc: Allocator, n: usize, min_prime: u64) ![]u64 {
@@ -93,32 +118,135 @@ pub fn hashPassword(password: []const u8) u64 {
     return hash;
 }
 
+/// Detects if the terminal supports emoji display
+/// This is a heuristic based on environment variables
+pub fn detectEmojiSupport() bool {
+    // Check for known emoji-supporting terminals
+    if (std.posix.getenv("TERM")) |term| {
+        // Modern terminals that generally support emojis
+        const emoji_terms = [_][]const u8{
+            "xterm-256color",
+            "screen-256color",
+            "tmux-256color",
+            "alacritty",
+            "kitty",
+            "wezterm",
+            "gnome",
+            "konsole",
+        };
+
+        for (emoji_terms) |emoji_term| {
+            if (std.mem.indexOf(u8, term, emoji_term) != null) {
+                return true;
+            }
+        }
+    }
+
+    // Check for UTF-8 locale support
+    if (std.posix.getenv("LC_ALL")) |lc| {
+        if (std.mem.indexOf(u8, lc, "UTF-8") != null or std.mem.indexOf(u8, lc, "utf8") != null) {
+            return true;
+        }
+    }
+
+    if (std.posix.getenv("LANG")) |lang| {
+        if (std.mem.indexOf(u8, lang, "UTF-8") != null or std.mem.indexOf(u8, lang, "utf8") != null) {
+            return true;
+        }
+    }
+
+    // Conservative fallback - assume no emoji support
+    return false;
+}
+
 /// Gets emoji representations for a password
 /// Allocates a new slice that the caller must free
 /// If custom_emojis is provided, uses that instead of the default emoji set
 /// If show_real is false, returns decoy emojis that change during typing
 pub fn getPasswordEmojis(alloc: Allocator, password: []const u8, count: usize, custom_emojis: ?[]const []const u8, show_real: bool) ![]const []const u8 {
+    return getPasswordSymbols(alloc, password, count, custom_emojis, show_real, false, false);
+}
+
+/// Gets the maximum length of symbols in a symbol table
+fn getMaxSymbolLength(symbols: []const []const u8) usize {
+    var max_len: usize = 0;
+    for (symbols) |symbol| {
+        if (symbol.len > max_len) {
+            max_len = symbol.len;
+        }
+    }
+    return max_len;
+}
+
+/// Center-pads a symbol with spaces to match the target length
+fn padSymbol(alloc: Allocator, symbol: []const u8, target_len: usize) ![]const u8 {
+    if (symbol.len >= target_len) return alloc.dupe(u8, symbol);
+
+    const padded = try alloc.alloc(u8, target_len);
+    const padding_total = target_len - symbol.len;
+    const padding_left = padding_total / 2;
+
+    // Fill with spaces
+    @memset(padded[0..padding_left], ' ');
+    @memcpy(padded[padding_left .. padding_left + symbol.len], symbol);
+    @memset(padded[padding_left + symbol.len ..], ' ');
+
+    return padded;
+}
+
+/// Frees memory allocated by getPasswordSymbols
+pub fn freePasswordSymbols(alloc: Allocator, symbols: []const []const u8, were_padded: bool) void {
+    if (were_padded) {
+        // Only free individual strings if they were padded (allocated)
+        for (symbols) |symbol| {
+            alloc.free(symbol);
+        }
+    }
+    // Always free the main array
+    alloc.free(symbols);
+}
+
+/// Gets password symbols (emojis or fallback symbols)
+/// Allocates a new slice that the caller must free with freePasswordSymbols
+/// If custom_emojis is provided, uses that instead of the default emoji set
+/// If show_real is false, returns decoy symbols that change during typing
+/// If use_fallback is true, uses ASCII-safe symbols instead of emojis
+/// If pad_symbols is true, pads all symbols to the same length for consistent display
+pub fn getPasswordSymbols(alloc: Allocator, password: []const u8, count: usize, custom_emojis: ?[]const []const u8, show_real: bool, use_fallback: bool, pad_symbols: bool) ![]const []const u8 {
     const base_hash = hashPassword(password);
     var result = try alloc.alloc([]const u8, count);
 
-    // Choose which emoji table to use
-    const emojis = custom_emojis orelse &default_emojis;
+    // Choose which symbol table to use
+    const symbols = if (use_fallback)
+        &fallback_emoticons
+    else
+        custom_emojis orelse &default_emojis;
 
     const hash = if (show_real) base_hash else blk: {
         var prng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
         break :blk prng.random().int(u64);
     };
 
-    // Generate primes starting from a value larger than our emoji table size
-    // This ensures better distribution when selecting emojis
-    const min_prime_size = emojis.len + 1;
+    // Generate primes starting from a value larger than our symbol table size
+    // This ensures better distribution when selecting symbols
+    const min_prime_size = symbols.len + 1;
     const primes = try generatePrimes(alloc, count, min_prime_size);
     defer alloc.free(primes);
 
+    // Get max symbol length if padding is requested
+    const max_len = if (pad_symbols) getMaxSymbolLength(symbols) else 0;
+
     for (0..count) |i| {
         // Use a different prime for each position
-        const emoji_idx = @mod(hash, primes[i]) % emojis.len;
-        result[i] = emojis[@intCast(emoji_idx)];
+        const symbol_idx = @mod(hash, primes[i]) % symbols.len;
+        const selected_symbol = symbols[@intCast(symbol_idx)];
+
+        if (pad_symbols and max_len > 0) {
+            result[i] = try padSymbol(alloc, selected_symbol, max_len);
+        } else {
+            // Don't duplicate if not padding - just reference the original string
+            result[i] = selected_symbol;
+        }
     }
 
     return result;

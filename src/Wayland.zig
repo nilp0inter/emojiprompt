@@ -824,12 +824,12 @@ const Surface = struct {
                 self.height += prompt.height + uiconf.vertical_padding;
             }
 
-            const square_padding = @divFloor(uiconf.pin_square_size, 2);
-            const pinarea_height = uiconf.pin_square_size + 2 * square_padding;
-            const pinarea_width = uiconf.pin_square_amount * (uiconf.pin_square_size + square_padding) + square_padding;
+            const emoji_padding = @divFloor(uiconf.emoji_size, 2);
+            const emojiarea_height = uiconf.emoji_size + 2 * emoji_padding;
+            const emojiarea_width = uiconf.emoji_count * (uiconf.emoji_size + emoji_padding) + emoji_padding;
 
-            self.height += pinarea_height + uiconf.vertical_padding;
-            self.width = @max(self.width, pinarea_width + 2 * uiconf.horizontal_padding);
+            self.height += emojiarea_height + uiconf.vertical_padding;
+            self.width = @max(self.width, emojiarea_width + 2 * uiconf.horizontal_padding);
         }
 
         if (self.w.title) |title| {
@@ -939,7 +939,7 @@ const Surface = struct {
                 const X = @divFloor(self.width, 2) -| @divFloor(prompt.width, 2);
                 Y += try prompt.draw(image, &colours.text, X, Y, uiconf.vertical_padding);
             }
-            Y += self.drawPinArea(image, self.w.config.secbuf.len, Y);
+            Y += self.drawEmojiArea(image, self.w.config.secbuf.len, Y);
         }
 
         if (self.w.errmessage) |errmessage| {
@@ -1213,35 +1213,20 @@ const Surface = struct {
         }
     }
 
-    fn drawPinArea(self: *Surface, image: *pixman.Image, len: usize, pinarea_y: u31) u31 {
+    fn drawEmojiArea(self: *Surface, image: *pixman.Image, len: usize, emojiarea_y: u31) u31 {
         const uiconf = self.w.config.wayland_ui;
         const colours = self.w.config.wayland_colours;
-        const square_padding = @divFloor(uiconf.pin_square_size, 2);
-        const pinarea_height = uiconf.pin_square_size + 2 * square_padding;
-        const pinarea_width = uiconf.pin_square_amount * (uiconf.pin_square_size + square_padding) + square_padding;
-        const pinarea_x = @divFloor(self.width, 2) - @divFloor(pinarea_width, 2);
+        const emoji_padding = @divFloor(uiconf.emoji_size, 2);
+        const emojiarea_height = uiconf.emoji_size + 2 * emoji_padding;
+        const emojiarea_width = uiconf.emoji_count * (uiconf.emoji_size + emoji_padding) + emoji_padding;
+        const emojiarea_x = @divFloor(self.width, 2) - @divFloor(emojiarea_width, 2);
 
-        // Draw the PIN area background
-        borderedRectangle(
-            image,
-            pinarea_x,
-            pinarea_y,
-            pinarea_width,
-            pinarea_height,
-            uiconf.border,
-            self.scale,
-            &colours.pin_background,
-            &colours.pin_border,
-        );
-
-        // If emoji feedback is enabled and we have a password, show emoji feedback
-        if (uiconf.use_emoji_feedback and len > 0) {
+        // Only show emojis if we have a password
+        if (len > 0) {
             if (self.w.config.secbuf.slice()) |password| {
-                // Only display emojis if we have enough characters in the password
                 if (password.len > 0) {
                     // Get user-defined emoji table if available
                     const custom_emoji_table = if (uiconf.emoji_table) |table| blk: {
-                        // Parse the comma-separated emoji list into an array
                         var emoji_list = std.ArrayList([]const u8).init(self.w.config.alloc);
                         defer emoji_list.deinit();
 
@@ -1253,7 +1238,6 @@ const Surface = struct {
                             }
                         }
 
-                        // If we found at least 3 valid emojis, use them
                         if (emoji_list.items.len >= 3) {
                             const emoji_array = emoji_list.toOwnedSlice() catch null;
                             break :blk emoji_array;
@@ -1265,26 +1249,24 @@ const Surface = struct {
 
                     const password_emojis = EmojiHash.getPasswordEmojis(self.w.config.alloc, password, @intCast(uiconf.emoji_count), custom_emoji_table, self.w.password_state != .typing) catch |err| {
                         log.err("Failed to get password emojis: {s}", .{@errorName(err)});
-                        // Fallback to default squares
-                        self.drawPasswordSquares(image, len, pinarea_x, pinarea_y, square_padding);
-                        return pinarea_height + uiconf.vertical_padding;
+                        return emojiarea_height + uiconf.vertical_padding;
                     };
-                    defer self.w.config.alloc.free(password_emojis);
+                    defer EmojiHash.freePasswordSymbols(self.w.config.alloc, password_emojis, false);
 
-                    // Calculate emoji positioning (centered in the PIN area)
-                    var emoji_padding: u31 = @intCast(@divFloor(pinarea_width - (password_emojis.len * uiconf.pin_square_size), password_emojis.len + 1));
-                    emoji_padding = @max(emoji_padding, square_padding);
+                    // Calculate emoji positioning (centered)
+                    var spacing: u31 = @intCast(@divFloor(emojiarea_width - (password_emojis.len * uiconf.emoji_size), password_emojis.len + 1));
+                    spacing = @max(spacing, emoji_padding);
 
                     for (password_emojis, 0..) |emoji, i| {
-                        const x = pinarea_x + emoji_padding + (i * (uiconf.pin_square_size + emoji_padding));
-                        const y = pinarea_y + square_padding;
+                        const x = emojiarea_x + spacing + (i * (uiconf.emoji_size + spacing));
+                        const y = emojiarea_y + emoji_padding;
 
                         if (TextView.new(self.w.config.alloc, emoji, self.w.font_regular.?)) |emoji_text| {
                             defer emoji_text.deinit(self.w.config.alloc);
 
                             // Center the emoji in its allocated space
-                            const emoji_x = x + @divFloor(uiconf.pin_square_size - emoji_text.width, 2);
-                            const emoji_y = y + @divFloor(uiconf.pin_square_size - emoji_text.height, 2);
+                            const emoji_x = x + @divFloor(uiconf.emoji_size - emoji_text.width, 2);
+                            const emoji_y = y + @divFloor(uiconf.emoji_size - emoji_text.height, 2);
 
                             _ = emoji_text.draw(image, &colours.text, @as(u31, @intCast(emoji_x)), @as(u31, @intCast(emoji_y)), @as(u31, 0)) catch |err| {
                                 log.err("Failed to draw emoji: {s}", .{@errorName(err)});
@@ -1293,41 +1275,11 @@ const Surface = struct {
                             log.err("Failed to create emoji text: {s}", .{@errorName(err)});
                         }
                     }
-                } else {
-                    // If password is empty, draw nothing
                 }
-            } else {
-                // If we can't access the password, fall back to squares
-                self.drawPasswordSquares(image, len, pinarea_x, pinarea_y, square_padding);
             }
-        } else {
-            // Use the default squares
-            self.drawPasswordSquares(image, len, pinarea_x, pinarea_y, square_padding);
         }
 
-        return pinarea_height + uiconf.vertical_padding;
-    }
-
-    fn drawPasswordSquares(self: *Surface, image: *pixman.Image, len: usize, pinarea_x: u31, pinarea_y: u31, square_padding: u31) void {
-        const uiconf = self.w.config.wayland_ui;
-        const colours = self.w.config.wayland_colours;
-
-        var i: usize = 0;
-        while (i < len and i < uiconf.pin_square_amount) : (i += 1) {
-            const x: u31 = @intCast(pinarea_x + (i * uiconf.pin_square_size) + ((i + 1) * square_padding));
-            const y = pinarea_y + square_padding;
-            borderedRectangle(
-                image,
-                x,
-                y,
-                uiconf.pin_square_size,
-                uiconf.pin_square_size,
-                uiconf.pin_square_border,
-                self.scale,
-                &colours.pin_square,
-                &colours.pin_border,
-            );
-        }
+        return emojiarea_height + uiconf.vertical_padding;
     }
 
     fn borderedRectangle(

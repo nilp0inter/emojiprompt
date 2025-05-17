@@ -35,6 +35,8 @@ pub fn main() !u8 {
     config = .{
         .secbuf = undefined,
         .alloc = alloc,
+        .allow_tty_fallback = true,
+        .tty_name = "/dev/tty",
     };
 
     parseCmdFlags() catch |err| {

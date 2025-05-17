@@ -11,8 +11,15 @@ const spoon = @import("spoon");
 const SecretBuffer = @import("SecretBuffer.zig");
 const Frontend = @import("Frontend.zig");
 const Config = @import("Config.zig");
+const EmojiHash = @import("EmojiHash.zig");
 
 const TTY = @This();
+
+const PasswordState = enum {
+    typing, // Show decoy emojis while user types
+    verification, // Show real emojis after first ENTER
+    submitted, // Password submitted (done)
+};
 
 const LineIterator = struct {
     in: ?[]const u8,
@@ -41,6 +48,8 @@ const LineIterator = struct {
 term: spoon.Term = undefined,
 config: *Config = undefined,
 mode: Frontend.InterfaceMode = .none,
+password_state: PasswordState = .typing,
+use_emoji: bool = false,
 
 pub fn init(self: *TTY, cfg: *Config) !posix.fd_t {
     self.config = cfg;
@@ -53,6 +62,17 @@ pub fn init(self: *TTY, cfg: *Config) !posix.fd_t {
         return error.NoTTYNameSet;
     }
 
+    // Determine if we should try to use emojis
+    // Check config first, then auto-detect if not explicitly set
+    self.use_emoji = if (cfg.wayland_ui.emoji_table) |table|
+        // If emoji_table is set to "none" or "ascii", don't use emojis
+        !std.mem.eql(u8, table, "none") and !std.mem.eql(u8, table, "ascii")
+    else
+        // Auto-detect emoji support based on terminal and locale
+        EmojiHash.detectEmojiSupport();
+
+    log.debug("TTY emoji support: {}", .{self.use_emoji});
+
     return self.term.tty.?;
 }
 
@@ -64,17 +84,23 @@ pub fn deinit(self: *TTY) void {
 
 pub fn enterMode(self: *TTY, mode: Frontend.InterfaceMode) !void {
     debug.assert(self.mode != mode);
+    self.mode = mode;
+
     if (mode == .none) {
         try self.term.cook();
     } else {
-        debug.assert(self.mode == .none);
         try self.term.uncook(.{});
         try self.term.fetchSize();
 
+        // Reset password state when entering a new mode
+        if (mode == .getpin) {
+            self.password_state = .typing;
+        }
+
         if (self.config.labels.title) |t| {
-            try self.term.setWindowTitle("wayprompt TTY fallback: {s}", .{t});
+            try self.term.setWindowTitle("emojiprompt TTY fallback: {s}", .{t});
         } else {
-            try self.term.setWindowTitle("wayprompt TTY fallback", .{});
+            try self.term.setWindowTitle("emojiprompt TTY fallback", .{});
         }
         try self.render();
     }
@@ -87,8 +113,22 @@ pub fn handleEvent(self: *TTY) !Frontend.Event {
     var it = spoon.inputParser(buf[0..read]);
     while (it.next()) |in| {
         if (in.eqlDescription("enter")) {
-            ret = .user_ok;
-            break;
+            // Two-stage ENTER system for password verification
+            if (self.mode == .getpin) {
+                if (self.password_state == .typing) {
+                    // First ENTER: switch to verification mode
+                    self.password_state = .verification;
+                    try self.render();
+                } else if (self.password_state == .verification) {
+                    // Second ENTER: submit the password
+                    self.password_state = .submitted;
+                    ret = .user_ok;
+                    break;
+                }
+            } else {
+                ret = .user_ok;
+                break;
+            }
         } else if (in.eqlDescription("escape")) {
             ret = .user_abort;
             break;
@@ -101,17 +141,30 @@ pub fn handleEvent(self: *TTY) !Frontend.Event {
             break;
         } else if (in.eqlDescription("C-w") or in.eqlDescription("C-backspace")) {
             if (self.mode == .getpin) {
+                // Any edit key returns to typing mode from verification
+                if (self.password_state == .verification) {
+                    self.password_state = .typing;
+                }
                 try self.config.secbuf.reset(self.config.alloc);
                 try self.render();
             }
         } else if (in.eqlDescription("backspace")) {
             if (self.mode == .getpin) {
+                // Any edit key returns to typing mode from verification
+                if (self.password_state == .verification) {
+                    self.password_state = .typing;
+                }
                 self.config.secbuf.deleteBackwards();
                 try self.render();
             }
         } else if (self.mode == .getpin and in.content == .codepoint) {
             if (in.mod_alt or in.mod_ctrl or in.mod_super) continue;
             const cp = in.content.codepoint;
+
+            // Any character input returns to typing mode from verification
+            if (self.password_state == .verification) {
+                self.password_state = .typing;
+            }
 
             // We can safely reuse the buffer here.
             const len = unicode.utf8Encode(cp, &buf) catch |err| {
@@ -130,6 +183,7 @@ pub fn handleEvent(self: *TTY) !Frontend.Event {
 
 // TODO listen to SIGWINCH
 fn render(self: *TTY) !void {
+    log.debug("TTY render() called", .{});
     var rc = try self.term.getRenderContext();
     defer rc.done() catch {};
     try rc.clear();
@@ -153,10 +207,65 @@ fn render(self: *TTY) !void {
         var rpw = rc.restrictedPaddingWriter(self.term.width);
         const writer = rpw.writer();
         try writer.writeAll(" > ");
-        const pin_square_amount = self.config.wayland_ui.pin_square_amount;
+
+        // Display emoji feedback or fallback
         const len = self.config.secbuf.len;
-        try writer.writeByteNTimes('*', @min(pin_square_amount, len));
-        try writer.writeByteNTimes('_', pin_square_amount -| len);
+        if (len > 0) {
+            if (self.config.secbuf.slice()) |password| {
+                if (password.len > 0) {
+                    // Get custom emoji table if configured
+                    const custom_emoji_table = if (self.config.wayland_ui.emoji_table) |table| blk: {
+                        var emoji_list = std.ArrayList([]const u8).init(self.config.alloc);
+                        defer emoji_list.deinit();
+
+                        var it = std.mem.tokenizeAny(u8, table, ",");
+                        while (it.next()) |emoji| {
+                            const trimmed = std.mem.trim(u8, emoji, " \t\n\r");
+                            if (trimmed.len > 0) {
+                                emoji_list.append(trimmed) catch continue;
+                            }
+                        }
+
+                        if (emoji_list.items.len >= 3) {
+                            const emoji_array = emoji_list.toOwnedSlice() catch null;
+                            break :blk emoji_array;
+                        } else {
+                            break :blk null;
+                        }
+                    } else null;
+                    defer if (custom_emoji_table) |table| self.config.alloc.free(table);
+
+                    // Get password symbols (emojis or emoticons)
+                    const password_symbols = EmojiHash.getPasswordSymbols(self.config.alloc, password, @intCast(self.config.wayland_ui.emoji_count), custom_emoji_table, self.password_state != .typing, // Show real symbols only in verification state
+                        !self.use_emoji, // Use fallback emoticons if emoji not supported
+                        !self.use_emoji // Pad symbols if using emoticons for consistent width
+                    ) catch |err| {
+                        log.err("Failed to get password symbols: {s}", .{@errorName(err)});
+                        // Fallback to asterisks on error
+                        try writer.writeByteNTimes('*', len);
+                        try rpw.finish();
+                        line += 2;
+                        return;
+                    };
+                    defer EmojiHash.freePasswordSymbols(self.config.alloc, password_symbols, !self.use_emoji);
+
+                    // Display the symbols
+                    for (password_symbols) |symbol| {
+                        try writer.writeAll(symbol);
+                        try writer.writeAll(" ");
+                    }
+
+                    // Show state indicator
+                    if (self.password_state == .verification) {
+                        try writer.writeAll(" [Press ENTER to confirm]");
+                    }
+                }
+            }
+        } else {
+            // No password yet, show placeholder
+            try writer.writeAll("[Type password]");
+        }
+
         try rpw.finish();
         line += 2;
     }
