@@ -74,6 +74,38 @@ const WaylandColours = struct {
 
 /// UI dimensions for Wayland frontend.
 /// Populated by configuration file.
+const TTYUi = struct {
+    use_emoji: bool = true, // Default to true, auto-detect will still apply if true
+    emoticons: std.ArrayListUnmanaged([]const u8) = .{}, // Custom emoticon list for TTY
+
+    fn reset(self: *TTYUi, alloc: mem.Allocator) void {
+        for (self.emoticons.items) |emoticon| {
+            alloc.free(emoticon);
+        }
+        self.emoticons.deinit(alloc);
+    }
+
+    fn assign(self: *TTYUi, alloc: mem.Allocator, path: []const u8, line: usize, variable: []const u8, value: []const u8) error{ BadConfig, OutOfMemory }!bool {
+        if (std.mem.eql(u8, variable, "use-emoji")) {
+            if (std.mem.eql(u8, value, "true") or std.mem.eql(u8, value, "yes") or std.mem.eql(u8, value, "1")) {
+                self.use_emoji = true;
+            } else if (std.mem.eql(u8, value, "false") or std.mem.eql(u8, value, "no") or std.mem.eql(u8, value, "0")) {
+                self.use_emoji = false;
+            } else {
+                log.err("{s}:{}: Invalid boolean value for 'use-emoji': '{s}'", .{ path, line, value });
+                return error.BadConfig;
+            }
+            return true;
+        } else if (std.mem.eql(u8, variable, "emoticon")) {
+            // Each emoticon is added as a separate entry
+            const emoticon_copy = try alloc.dupe(u8, value);
+            try self.emoticons.append(alloc, emoticon_copy);
+            return true;
+        }
+        return false;
+    }
+};
+
 const WaylandUi = struct {
     vertical_padding: u31 = 10,
     horizontal_padding: u31 = 15,
@@ -156,6 +188,7 @@ const WaylandUi = struct {
 labels: Labels = .{},
 wayland_colours: WaylandColours = .{},
 wayland_ui: WaylandUi = .{},
+tty_ui: TTYUi = .{},
 
 /// General process configuration stuff. Note that that alloc may be different
 /// from the allocator used for labels and other configuration things.
@@ -174,6 +207,7 @@ wayland_display: ?[:0]const u8 = null,
 /// Frees all memory using provided allocator.
 pub fn reset(self: *Config, alloc: mem.Allocator) void {
     self.wayland_ui.reset(alloc);
+    self.tty_ui.reset(alloc);
     const info = @typeInfo(@TypeOf(self.labels)).Struct;
     inline for (info.fields) |field| {
         if (@field(self.labels, field.name)) |str| {
@@ -196,7 +230,7 @@ pub fn parse(self: *Config, alloc: mem.Allocator) !void {
     const file = try fs.cwd().openFile(path, .{});
     defer file.close();
 
-    const Section = enum { none, general, colours };
+    const Section = enum { none, general, colours, tty };
     var section: Section = .none;
 
     var buffer = std.io.bufferedReader(file.reader());
@@ -226,6 +260,7 @@ pub fn parse(self: *Config, alloc: mem.Allocator) !void {
                 },
                 .general => try self.assignGeneral(alloc, path, line, as.variable, as.value),
                 .colours => try self.assignColour(path, line, as.variable, as.value),
+                .tty => try self.assignTTY(alloc, path, line, as.variable, as.value),
             },
         }
     }
@@ -256,6 +291,12 @@ fn assignGeneral(self: *Config, alloc: mem.Allocator, path: []const u8, line: us
 fn assignColour(self: *Config, path: []const u8, line: usize, variable: []const u8, value: []const u8) error{BadConfig}!void {
     if (try self.wayland_colours.assign(path, line, variable, value)) return;
     log.err("Unknown variable in section 'colours': '{s}'", .{variable});
+    return error.BadConfig;
+}
+
+fn assignTTY(self: *Config, alloc: mem.Allocator, path: []const u8, line: usize, variable: []const u8, value: []const u8) error{ BadConfig, OutOfMemory }!void {
+    if (try self.tty_ui.assign(alloc, path, line, variable, value)) return;
+    log.err("Unknown variable in section 'tty': '{s}'", .{variable});
     return error.BadConfig;
 }
 

@@ -218,8 +218,10 @@ pub fn getPasswordSymbols(alloc: Allocator, password: []const u8, count: usize, 
 
     // Choose which symbol table to use
     const symbols = if (use_fallback)
-        &fallback_emoticons
+        // When using fallback mode, prefer custom emoticons if provided
+        custom_emojis orelse &fallback_emoticons
     else
+        // When using emoji mode, prefer custom emojis if provided
         custom_emojis orelse &default_emojis;
 
     const hash = if (show_real) base_hash else blk: {

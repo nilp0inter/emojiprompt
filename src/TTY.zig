@@ -63,13 +63,12 @@ pub fn init(self: *TTY, cfg: *Config) !posix.fd_t {
     }
 
     // Determine if we should try to use emojis
-    // Check config first, then auto-detect if not explicitly set
-    self.use_emoji = if (cfg.wayland_ui.emoji_table) |table|
-        // If emoji_table is set to "none" or "ascii", don't use emojis
-        !std.mem.eql(u8, table, "none") and !std.mem.eql(u8, table, "ascii")
+    // Check config first - if explicitly set to false, don't use emojis
+    // Otherwise, auto-detect based on terminal capabilities
+    self.use_emoji = if (cfg.tty_ui.use_emoji)
+        EmojiHash.detectEmojiSupport()
     else
-        // Auto-detect emoji support based on terminal and locale
-        EmojiHash.detectEmojiSupport();
+        false;
 
     log.debug("TTY emoji support: {}", .{self.use_emoji});
 
@@ -213,30 +212,48 @@ fn render(self: *TTY) !void {
         if (len > 0) {
             if (self.config.secbuf.slice()) |password| {
                 if (password.len > 0) {
-                    // Get custom emoji table if configured
-                    const custom_emoji_table = if (self.config.wayland_ui.emoji_table) |table| blk: {
-                        var emoji_list = std.ArrayList([]const u8).init(self.config.alloc);
-                        defer emoji_list.deinit();
+                    // Parse the appropriate symbol table based on mode
+                    const symbol_table = if (self.use_emoji) blk: {
+                        // Using emojis - parse emoji table if provided
+                        if (self.config.wayland_ui.emoji_table) |table| {
+                            var emoji_list = std.ArrayList([]const u8).init(self.config.alloc);
+                            defer emoji_list.deinit();
 
-                        var it = std.mem.tokenizeAny(u8, table, ",");
-                        while (it.next()) |emoji| {
-                            const trimmed = std.mem.trim(u8, emoji, " \t\n\r");
-                            if (trimmed.len > 0) {
-                                emoji_list.append(trimmed) catch continue;
+                            var it = std.mem.tokenizeAny(u8, table, ",");
+                            while (it.next()) |emoji| {
+                                const trimmed = std.mem.trim(u8, emoji, " \t\n\r");
+                                if (trimmed.len > 0) {
+                                    emoji_list.append(trimmed) catch continue;
+                                }
+                            }
+
+                            if (emoji_list.items.len >= 3) {
+                                const emoji_array = emoji_list.toOwnedSlice() catch null;
+                                break :blk emoji_array;
                             }
                         }
-
-                        if (emoji_list.items.len >= 3) {
-                            const emoji_array = emoji_list.toOwnedSlice() catch null;
-                            break :blk emoji_array;
-                        } else {
-                            break :blk null;
+                        break :blk null;
+                    } else blk: {
+                        // Using emoticons - use custom emoticon table if provided
+                        if (self.config.tty_ui.emoticons.items.len >= 3) {
+                            // Use the custom emoticons from config
+                            // We need to pass a slice that won't be freed by the caller
+                            break :blk self.config.tty_ui.emoticons.items;
                         }
-                    } else null;
-                    defer if (custom_emoji_table) |table| self.config.alloc.free(table);
+                        break :blk null;
+                    };
+                    // Special handling for symbol_table memory
+                    const should_free_table = if (self.use_emoji)
+                        (symbol_table != null) // Emoji table was allocated
+                    else
+                        false; // Emoticon table points to config data, don't free
+
+                    defer if (should_free_table) {
+                        if (symbol_table) |table| self.config.alloc.free(table);
+                    };
 
                     // Get password symbols (emojis or emoticons)
-                    const password_symbols = EmojiHash.getPasswordSymbols(self.config.alloc, password, @intCast(self.config.wayland_ui.emoji_count), custom_emoji_table, self.password_state != .typing, // Show real symbols only in verification state
+                    const password_symbols = EmojiHash.getPasswordSymbols(self.config.alloc, password, @intCast(self.config.wayland_ui.emoji_count), symbol_table, self.password_state != .typing, // Show real symbols only in verification state
                         !self.use_emoji, // Use fallback emoticons if emoji not supported
                         !self.use_emoji // Pad symbols if using emoticons for consistent width
                     ) catch |err| {
