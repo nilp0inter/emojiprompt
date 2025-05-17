@@ -22,6 +22,12 @@ const EmojiHash = @import("EmojiHash.zig");
 
 const Wayland = @This();
 
+const PasswordState = enum {
+    typing, // Show decoy emojis while user types
+    verification, // Show real emojis after first ENTER
+    submitted, // Password submitted (done)
+};
+
 const HotSpot = struct {
     const Effect = enum { cancel, ok, notok };
 
@@ -491,6 +497,10 @@ const Seat = struct {
                     switch (@intFromEnum(keysym)) {
                         xkb.Keysym.BackSpace, xkb.Keysym.w => {
                             if (self.w.mode == .getpin) {
+                                // Any edit key returns to typing mode from verification
+                                if (self.w.password_state == .verification) {
+                                    self.w.password_state = .typing;
+                                }
                                 self.w.config.secbuf.reset(self.w.config.alloc) catch self.w.abort(error.OutOfMemory);
                                 self.w.surface.?.render() catch self.w.abort(error.OutOfMemory);
                             }
@@ -500,11 +510,23 @@ const Seat = struct {
                 } else {
                     switch (@intFromEnum(keysym)) {
                         xkb.Keysym.Return => {
-                            self.w.abort(error.UserOk);
+                            // Two-stage ENTER system for password verification
+                            if (self.w.password_state == .typing) {
+                                // First ENTER: switch to verification mode
+                                self.w.password_state = .verification;
+                                self.w.surface.?.render() catch self.w.abort(error.OutOfMemory);
+                            } else if (self.w.password_state == .verification) {
+                                // Second ENTER: submit the password
+                                self.w.abort(error.UserOk);
+                            }
                             return;
                         },
                         xkb.Keysym.BackSpace => {
                             if (self.w.mode == .getpin) {
+                                // Any edit key returns to typing mode from verification
+                                if (self.w.password_state == .verification) {
+                                    self.w.password_state = .typing;
+                                }
                                 self.w.config.secbuf.deleteBackwards();
                                 self.w.surface.?.render() catch self.w.abort(error.OutOfMemory);
                             }
@@ -519,6 +541,11 @@ const Seat = struct {
                     }
 
                     if (self.w.mode != .getpin) return;
+
+                    // Any character input returns to typing mode from verification
+                    if (self.w.password_state == .verification) {
+                        self.w.password_state = .typing;
+                    }
 
                     var buffer: [16]u8 = undefined;
                     const used = self.xkb_state.?.keyGetUtf8(keycode, &buffer);
@@ -1213,35 +1240,30 @@ const Surface = struct {
                 // Only display emojis if we have enough characters in the password
                 if (password.len > 0) {
                     // Get user-defined emoji table if available
-                const custom_emoji_table = if (uiconf.emoji_table) |table| blk: {
-                    // Parse the comma-separated emoji list into an array
-                    var emoji_list = std.ArrayList([]const u8).init(self.w.config.alloc);
-                    defer emoji_list.deinit();
-                    
-                    var it = std.mem.tokenizeAny(u8, table, ",");
-                    while (it.next()) |emoji| {
-                        const trimmed = std.mem.trim(u8, emoji, " \t\n\r");
-                        if (trimmed.len > 0) {
-                            emoji_list.append(trimmed) catch continue;
+                    const custom_emoji_table = if (uiconf.emoji_table) |table| blk: {
+                        // Parse the comma-separated emoji list into an array
+                        var emoji_list = std.ArrayList([]const u8).init(self.w.config.alloc);
+                        defer emoji_list.deinit();
+
+                        var it = std.mem.tokenizeAny(u8, table, ",");
+                        while (it.next()) |emoji| {
+                            const trimmed = std.mem.trim(u8, emoji, " \t\n\r");
+                            if (trimmed.len > 0) {
+                                emoji_list.append(trimmed) catch continue;
+                            }
                         }
-                    }
-                    
-                    // If we found at least 3 valid emojis, use them
-                    if (emoji_list.items.len >= 3) {
-                        const emoji_array = emoji_list.toOwnedSlice() catch null;
-                        break :blk emoji_array;
-                    } else {
-                        break :blk null;
-                    }
-                } else null;
-                defer if (custom_emoji_table) |table| self.w.config.alloc.free(table);
-                
-                const password_emojis = EmojiHash.getPasswordEmojis(
-                    self.w.config.alloc, 
-                    password, 
-                    @intCast(uiconf.emoji_count),
-                    custom_emoji_table
-                ) catch |err| {
+
+                        // If we found at least 3 valid emojis, use them
+                        if (emoji_list.items.len >= 3) {
+                            const emoji_array = emoji_list.toOwnedSlice() catch null;
+                            break :blk emoji_array;
+                        } else {
+                            break :blk null;
+                        }
+                    } else null;
+                    defer if (custom_emoji_table) |table| self.w.config.alloc.free(table);
+
+                    const password_emojis = EmojiHash.getPasswordEmojis(self.w.config.alloc, password, @intCast(uiconf.emoji_count), custom_emoji_table, self.w.password_state != .typing) catch |err| {
                         log.err("Failed to get password emojis: {s}", .{@errorName(err)});
                         // Fallback to default squares
                         self.drawPasswordSquares(image, len, pinarea_x, pinarea_y, square_padding);
@@ -1252,25 +1274,19 @@ const Surface = struct {
                     // Calculate emoji positioning (centered in the PIN area)
                     var emoji_padding: u31 = @intCast(@divFloor(pinarea_width - (password_emojis.len * uiconf.pin_square_size), password_emojis.len + 1));
                     emoji_padding = @max(emoji_padding, square_padding);
-                    
+
                     for (password_emojis, 0..) |emoji, i| {
                         const x = pinarea_x + emoji_padding + (i * (uiconf.pin_square_size + emoji_padding));
                         const y = pinarea_y + square_padding;
-                        
+
                         if (TextView.new(self.w.config.alloc, emoji, self.w.font_regular.?)) |emoji_text| {
                             defer emoji_text.deinit(self.w.config.alloc);
-                            
+
                             // Center the emoji in its allocated space
                             const emoji_x = x + @divFloor(uiconf.pin_square_size - emoji_text.width, 2);
                             const emoji_y = y + @divFloor(uiconf.pin_square_size - emoji_text.height, 2);
-                            
-                            _ = emoji_text.draw(
-                                image,
-                                &colours.text,
-                                @as(u31, @intCast(emoji_x)),
-                                @as(u31, @intCast(emoji_y)),
-                                @as(u31, 0)
-                            ) catch |err| {
+
+                            _ = emoji_text.draw(image, &colours.text, @as(u31, @intCast(emoji_x)), @as(u31, @intCast(emoji_y)), @as(u31, 0)) catch |err| {
                                 log.err("Failed to draw emoji: {s}", .{@errorName(err)});
                             };
                         } else |err| {
@@ -1291,11 +1307,11 @@ const Surface = struct {
 
         return pinarea_height + uiconf.vertical_padding;
     }
-    
+
     fn drawPasswordSquares(self: *Surface, image: *pixman.Image, len: usize, pinarea_x: u31, pinarea_y: u31, square_padding: u31) void {
         const uiconf = self.w.config.wayland_ui;
         const colours = self.w.config.wayland_colours;
-        
+
         var i: usize = 0;
         while (i < len and i < uiconf.pin_square_amount) : (i += 1) {
             const x: u31 = @intCast(pinarea_x + (i * uiconf.pin_square_size) + ((i + 1) * square_padding));
@@ -1513,6 +1529,7 @@ const Buffer = struct {
 
 config: *Config = undefined,
 mode: Frontend.InterfaceMode = .none,
+password_state: PasswordState = .typing,
 
 title: ?TextView = null,
 description: ?TextView = null,
@@ -1637,6 +1654,12 @@ pub fn enterMode(self: *Wayland, mode: Frontend.InterfaceMode) !void {
     self.deinitTextViews();
 
     self.mode = mode;
+
+    // Reset password state when entering getpin mode
+    if (mode == .getpin) {
+        self.password_state = .typing;
+    }
+
     if (mode == .none) {
         debug.assert(self.surface != null);
         self.surface.?.deinit();
